@@ -589,7 +589,14 @@ static int gf_open(struct inode *inode, struct file *filp)
 	return status;
 err_irq:
 	gf_cleanup(gf_dev);
+	return status;
 err_parse_dt:
+	/*
+	 * gf_parse_dts() may already hold some of the GPIOs it managed to
+	 * request before failing; without this the pins stay claimed and every
+	 * later open() returns -EBUSY.
+	 */
+	gf_cleanup(gf_dev);
 	return status;
 }
 
