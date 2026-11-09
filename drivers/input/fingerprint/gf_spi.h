@@ -150,7 +150,12 @@ struct gf_dev {
 	char fb_black;
 
 	struct regulator *vcc;
-	unsigned int osvcc_ze602kl_enable_pin;
+	/*
+	 * Signed on purpose: of_get_named_gpio() returns a negative errno on
+	 * failure, and an unsigned field would turn that into a huge bogus
+	 * GPIO number that gpio_is_valid() could no longer reject.
+	 */
+	signed int osvcc_ze602kl_enable_pin;
 };
 
 int gf_parse_dts(struct gf_dev* gf_dev);

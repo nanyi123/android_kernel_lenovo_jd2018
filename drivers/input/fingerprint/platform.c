@@ -53,19 +53,35 @@ int gf_parse_dts(struct gf_dev *gf_dev)
 	}
 	gpio_direction_input(gf_dev->irq_gpio);
 
-	/*get vcc resourece*/
+	/*
+	 * Optional VCC enable pin.
+	 *
+	 * This driver comes from the ASUS ZB602KL/ZE602KL family, whose
+	 * fingerprint rail is gated by a PMIC GPIO. On jd2018 (Lenovo Z5) that
+	 * PMIC GPIO is not wired to the sensor -- the rail is always powered or
+	 * gated elsewhere -- and the pin is already owned by another driver, so
+	 * gpio_request() returns -EBUSY. That used to abort gf_parse_dts(),
+	 * which made gf_open() return -1 (-EPERM) and the HAL fail with
+	 * "Failed to open device (/dev/goodix_fp): Operation not permitted".
+	 *
+	 * Treat the pin as strictly optional: if it is missing or cannot be
+	 * claimed, mark it invalid and carry on. gf_power_on()/gf_power_off()
+	 * already gate every access on gpio_is_valid().
+	 */
 	gf_dev->osvcc_ze602kl_enable_pin = of_get_named_gpio(gf_dev->spi->dev.of_node,"fp-vcc-enable-gpio", 0);
 	printk("[GDX_FP] gf::osvcc_ze602kl_enable_pin:%d\n", gf_dev->osvcc_ze602kl_enable_pin);
-	if(!gpio_is_valid(gf_dev->osvcc_ze602kl_enable_pin)) {
-		pr_info("osvcc_ze602kl_enable_pin GPIO is invalid.\n");
-		return -1;
+	if (!gpio_is_valid(gf_dev->osvcc_ze602kl_enable_pin)) {
+		pr_info("osvcc_ze602kl_enable_pin is not present, assuming rail always on.\n");
+		gf_dev->osvcc_ze602kl_enable_pin = -1;
+		return 0;
 	}
 	//gpio_direction_output(gf_dev->osvcc_ze602kl_enable_pin, 1);
 
 	rc = gpio_request(gf_dev->osvcc_ze602kl_enable_pin, "vcc_ze602kl_enable_pin");
 	if(rc) {
-		dev_err(&gf_dev->spi->dev, "Failed to request osvcc_ze602kl_enable_pin GPIO. rc = %d\n", rc);
-		return -1;
+		dev_warn(&gf_dev->spi->dev,
+			 "Failed to request osvcc_ze602kl_enable_pin GPIO. rc = %d, assuming rail always on\n", rc);
+		gf_dev->osvcc_ze602kl_enable_pin = -1;
 	}
 
 	return 0;
@@ -82,6 +98,10 @@ void gf_cleanup(struct gf_dev *gf_dev)
 	if (gpio_is_valid(gf_dev->reset_gpio)) {
 		gpio_free(gf_dev->reset_gpio);
 		pr_info("remove reset_gpio success\n");
+	}
+	if (gpio_is_valid(gf_dev->osvcc_ze602kl_enable_pin)) {
+		gpio_free(gf_dev->osvcc_ze602kl_enable_pin);
+		pr_info("remove osvcc_ze602kl_enable_pin success\n");
 	}
 }
 
