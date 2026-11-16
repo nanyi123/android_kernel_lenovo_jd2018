@@ -5910,7 +5910,12 @@ static int __afe_port_start(u16 port_id, union afe_port_config *afe_config,
 		ret = -EINVAL;
 		goto fail_cmd;
 	}
+	pr_info("[AudioDBG-AFE] port_start port 0x%x rate %u i2s bit_width %u ch_mode 0x%x mono 0x%x ws_src %u data_fmt 0x%x\n",
+		port_id, rate, port_cfg.i2s.bit_width,
+		port_cfg.i2s.channel_mode, port_cfg.i2s.mono_stereo,
+		port_cfg.i2s.ws_src, port_cfg.i2s.data_format);
 	ret = afe_send_cmd_port_start(port_id);
+	pr_info("[AudioDBG-AFE] port_start cmd ret %d\n", ret);
 
 fail_cmd:
 	if (ret) {
@@ -9344,6 +9349,9 @@ int afe_set_lpass_clock_v2(u16 port_id, struct afe_clk_set *cfg)
 	}
 
 	ret = afe_set_lpass_clk_cfg(index, cfg);
+	pr_info("[AudioDBG-AFE] set_lpass_clock_v2 port 0x%x clk_id 0x%x freq %u attri %u root %u ret %d\n",
+		port_id, cfg->clk_id, cfg->clk_freq_in_hz, cfg->clk_attri,
+		cfg->clk_root, ret);
 
 done:
 	if (ret)

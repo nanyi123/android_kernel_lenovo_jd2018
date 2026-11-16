@@ -4603,6 +4603,9 @@ static int msm_mi2s_set_sclk(struct snd_pcm_substream *substream, bool enable)
 	mi2s_clk[index].enable = enable;
 	ret = afe_set_lpass_clock_v2(port_id,
 				     &mi2s_clk[index]);
+	pr_info("[AudioDBG] %s: port 0x%x index %d enable %d freq %u ret %d\n",
+		__func__, port_id, index, enable,
+		mi2s_clk[index].clk_freq_in_hz, ret);
 	if (ret < 0) {
 		dev_err(rtd->card->dev,
 			"%s: afe lpass clock failed for port 0x%x , err:%d\n",
@@ -4650,7 +4653,11 @@ int msm_mi2s_snd_startup(struct snd_pcm_substream *substream)
 	 * that the same clock won't be enable twice.
 	 */
 	mutex_lock(&mi2s_intf_conf[index].lock);
-	if (++mi2s_intf_conf[index].ref_cnt == 1) {
+	++mi2s_intf_conf[index].ref_cnt;
+	pr_info("[AudioDBG] %s: index %d ref_cnt %d master %d fmt 0x%x\n",
+		__func__, index, mi2s_intf_conf[index].ref_cnt,
+		mi2s_intf_conf[index].msm_is_mi2s_master, fmt);
+	if (mi2s_intf_conf[index].ref_cnt == 1) {
 		/* Check if msm needs to provide the clock to the interface */
 		if (!mi2s_intf_conf[index].msm_is_mi2s_master) {
 			mi2s_clk[index].clk_id = mi2s_ebit_clk[index];
@@ -4726,7 +4733,10 @@ void msm_mi2s_snd_shutdown(struct snd_pcm_substream *substream)
 	}
 
 	mutex_lock(&mi2s_intf_conf[index].lock);
-	if (--mi2s_intf_conf[index].ref_cnt == 0) {
+	--mi2s_intf_conf[index].ref_cnt;
+	pr_info("[AudioDBG] %s: index %d ref_cnt %d\n",
+		__func__, index, mi2s_intf_conf[index].ref_cnt);
+	if (mi2s_intf_conf[index].ref_cnt == 0) {
 		if (pdata->mi2s_gpio_p[index])
 			msm_cdc_pinctrl_select_sleep_state(
 					pdata->mi2s_gpio_p[index]);

@@ -244,14 +244,14 @@ KBUILD_EXTRA_SYMBOLS +=$(OUT)/obj/vendor/qcom/opensource/audio-kernel/soc/Module
 endif
 
 ifeq ($(KERNEL_BUILD), 1)
-	obj-y	+= wcd934x/
-	obj-y	+= wcd937x/
-	obj-y	+= wcd938x/
-	obj-y	+= bolero/
-	obj-y	+= rouleur/
-	obj-y	+= wsa883x/
-	obj-y	+= sdm660_cdc/
-	obj-y	+= msm_sdw/
+	obj-$(CONFIG_SND_SOC_WCD934X)	+= wcd934x/
+	obj-$(CONFIG_SND_SOC_WCD937X)	+= wcd937x/
+	obj-$(CONFIG_SND_SOC_WCD938X)	+= wcd938x/
+	obj-$(CONFIG_SND_SOC_BOLERO)	+= bolero/
+	obj-$(CONFIG_SND_SOC_ROULEUR)	+= rouleur/
+	obj-$(CONFIG_SND_SOC_WSA883X)	+= wsa883x/
+	obj-$(CONFIG_SND_SOC_SDM660_CDC)	+= sdm660_cdc/
+	obj-$(CONFIG_SND_SOC_MSM_SDW)	+= msm_sdw/
 endif
 # Module information used by KBuild framework
 obj-$(CONFIG_WCD9XXX_CODEC_CORE) += wcd_core_dlkm.o

@@ -468,7 +468,12 @@ static int msm_gpio_get_direction(struct gpio_chip *chip, unsigned int offset)
 	const struct msm_pingroup *g;
 	u32 val;
 
+	if (!pctrl || !pctrl->soc || offset >= pctrl->soc->ngroups)
+		return -EINVAL;
+
 	g = &pctrl->soc->groups[offset];
+	if (!g || g->ctl_reg == 0 || g->oe_bit < 0)
+		return 1;
 
 	val = readl(pctrl->regs + g->ctl_reg);
 

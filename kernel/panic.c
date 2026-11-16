@@ -248,6 +248,14 @@ void panic(const char *fmt, ...)
 	if (vendor_panic_cb)
 		vendor_panic_cb(0);
 	pr_emerg("Kernel panic - not syncing: %s\n", buf);
+	{
+		extern void lenovo_splash_status(int slot, const char *prefix, const char *val, u32 color);
+		extern void lenovo_splash_trace(const char *msg, u32 color);
+		buf[40] = 0;
+		lenovo_splash_status(7, "PANIC", buf, 0xFFFF0000);
+		lenovo_splash_trace(buf, 0xFFFF0000);
+		lenovo_splash_trace("[PANIC] pstore dump & reboot in 5s", 0xFFFF0000);
+	}
 #ifdef CONFIG_DEBUG_BUGVERBOSE
 	/*
 	 * Avoid nested stack-dumping if a panic occurs during oops processing

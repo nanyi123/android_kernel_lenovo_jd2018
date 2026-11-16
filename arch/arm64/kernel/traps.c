@@ -241,6 +241,21 @@ void die(const char *str, struct pt_regs *regs, int err)
 	add_taint(TAINT_DIE, LOCKDEP_NOW_UNRELIABLE);
 	oops_exit();
 
+	{
+		extern void lenovo_splash_status(int slot, const char *prefix, const char *val, u32 color);
+		extern void lenovo_splash_trace(const char *msg, u32 color);
+		char dmsg[64];
+		snprintf(dmsg, sizeof(dmsg), "%s err=%d", str, err);
+		lenovo_splash_status(7, "OOPS/DIE", dmsg, 0xFFFF0000);
+		if (regs) {
+			snprintf(dmsg, sizeof(dmsg), "%pS", (void *)regs->pc);
+			lenovo_splash_status(8, "PC", dmsg, 0xFFFF0000);
+			snprintf(dmsg, sizeof(dmsg), "%pS", (void *)regs->regs[30]);
+			lenovo_splash_status(9, "LR", dmsg, 0xFFFF0000);
+		}
+		lenovo_splash_trace("[PANIC-IN-5s] Kernel Oops / Die", 0xFFFF0000);
+	}
+
 	if (in_interrupt())
 		panic("Fatal exception in interrupt");
 	if (panic_on_oops)
@@ -871,6 +886,21 @@ void __noreturn arm64_serror_panic(struct pt_regs *regs, u32 esr)
 		smp_processor_id(), esr, esr_get_class_string(esr));
 	if (regs)
 		__show_regs(regs);
+
+	{
+		extern void lenovo_splash_status(int slot, const char *prefix, const char *val, u32 color);
+		extern void lenovo_splash_trace(const char *msg, u32 color);
+		char smsg[64];
+		snprintf(smsg, sizeof(smsg), "0x%08x", esr);
+		lenovo_splash_status(7, "SERROR", smsg, 0xFFFF0000);
+		if (regs) {
+			snprintf(smsg, sizeof(smsg), "%pS", (void *)regs->pc);
+			lenovo_splash_status(8, "PC", smsg, 0xFFFF0000);
+			snprintf(smsg, sizeof(smsg), "%pS", (void *)regs->regs[30]);
+			lenovo_splash_status(9, "LR", smsg, 0xFFFF0000);
+		}
+		lenovo_splash_trace("[PANIC-IN-5s] Asynchronous SError", 0xFFFF0000);
+	}
 
 	nmi_panic(regs, "Asynchronous SError Interrupt");
 

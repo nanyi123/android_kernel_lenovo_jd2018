@@ -2076,11 +2076,14 @@ static void handle_bad_sector(struct bio *bio, sector_t maxsector)
 {
 	char b[BDEVNAME_SIZE];
 
-	pr_info_ratelimited("attempt to access beyond end of device\n"
-			    "%s: rw=%d, want=%Lu, limit=%Lu\n",
+	/* pr_debug: loop 越界读风暴(8万+/3s) 会把 console/dmesg 环形冲掉,
+	 * 导致真正的 WARNING 详情被 printk 丢行. 越界本身是平行症状, 已立案. */
+	pr_debug("attempt to access beyond end of device\n"
+		 "%s: rw=%d, want=%Lu, limit=%Lu, culprit=%s(%d)\n",
 			    bio_devname(bio, b), bio->bi_opf,
 			    (unsigned long long)bio_end_sector(bio),
-			    (long long)maxsector);
+			    (long long)maxsector,
+			    current->comm, current->pid);
 }
 
 #ifdef CONFIG_FAIL_MAKE_REQUEST

@@ -607,9 +607,11 @@ static int __initdata do_skip_initramfs;
 
 static int __init skip_initramfs_param(char *str)
 {
-	if (*str)
-		return 0;
-	do_skip_initramfs = 1;
+	/* Ignore skip_initramfs from legacy Android 9 ABL bootloader:
+	 * Android 14 mandates unpacking first-stage ramdisk to run /init!
+	 */
+	pr_info("initramfs: ignoring legacy skip_initramfs from bootloader\n");
+	do_skip_initramfs = 0;
 	return 1;
 }
 __setup("skip_initramfs", skip_initramfs_param);
@@ -641,23 +643,35 @@ static void __init populate_initrd_image(char *err)
 static int __init populate_rootfs(void)
 {
 	char *err;
+	extern void lenovo_splash_status(int slot, const char *prefix, const char *val, u32 color);
+	extern void lenovo_splash_trace(const char *msg, u32 color);
+	char rmsg[64];
 
-	if (do_skip_initramfs) {
-		if (initrd_start)
-			free_initrd();
-		return default_rootfs();
-	}
+	snprintf(rmsg, sizeof(rmsg), "START (initrd=%lx)", initrd_start);
+	lenovo_splash_status(5, "ROOTFS", rmsg, 0xFFFFFF00);
+	lenovo_splash_trace("[ROOTFS] Populating rootfs from initrd...", 0xFFFFFFFF);
+
+	/* For Android 14, always unpack ramdisk (First Stage Init) */
+	do_skip_initramfs = 0;
 
 	/* Load the built in initramfs */
 	err = unpack_to_rootfs(__initramfs_start, __initramfs_size);
-	if (err)
+	if (err) {
+		lenovo_splash_status(5, "ROOTFS", "INTERNAL FAIL", 0xFFFF0000);
+		lenovo_splash_trace("[ROOTFS] INTERNAL UNPACK FAIL", 0xFFFF0000);
 		panic("%s", err); /* Failed to decompress INTERNAL initramfs */
+	}
 	/* If available load the bootloader supplied initrd */
 	if (initrd_start && !IS_ENABLED(CONFIG_INITRAMFS_FORCE)) {
+		lenovo_splash_status(5, "ROOTFS", "UNPACKING...", 0xFFFFFFFF);
+		lenovo_splash_trace("[ROOTFS] Unpacking external initramfs...", 0xFFFFFFFF);
 #ifdef CONFIG_BLK_DEV_RAM
 		printk(KERN_INFO "Trying to unpack rootfs image as initramfs...\n");
 		err = unpack_to_rootfs((char *)initrd_start,
 			initrd_end - initrd_start);
+		snprintf(rmsg, sizeof(rmsg), "UNPACK RET: %s", err ? err : "SUCCESS");
+		lenovo_splash_status(5, "ROOTFS", err ? "UNPACK FAILED" : "SUCCESS", err ? 0xFFFF0000 : 0xFF00FF00);
+		lenovo_splash_trace(rmsg, err ? 0xFFFF0000 : 0xFF00FF00);
 		if (!err)
 			goto done;
 
@@ -669,9 +683,15 @@ static int __init populate_rootfs(void)
 		printk(KERN_INFO "Unpacking initramfs...\n");
 		err = unpack_to_rootfs((char *)initrd_start,
 			initrd_end - initrd_start);
+		snprintf(rmsg, sizeof(rmsg), "UNPACK RET: %s", err ? err : "SUCCESS");
+		lenovo_splash_status(5, "ROOTFS", err ? "UNPACK FAILED" : "SUCCESS", err ? 0xFFFF0000 : 0xFF00FF00);
+		lenovo_splash_trace(rmsg, err ? 0xFFFF0000 : 0xFF00FF00);
 		if (err)
 			printk(KERN_EMERG "Initramfs unpacking failed: %s\n", err);
 #endif
+	} else {
+		lenovo_splash_status(5, "ROOTFS", "NO INITRD", 0xFFFF0000);
+		lenovo_splash_trace("[ROOTFS] Error: NO INITRD SUPPLIED!", 0xFFFF0000);
 	}
 	free_initrd();
 	flush_delayed_fput();

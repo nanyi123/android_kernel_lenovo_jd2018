@@ -752,6 +752,13 @@ static irqreturn_t wdog_bark_handler(int irq, void *dev_id)
 	unsigned long nanosec_rem;
 	unsigned long long t = sched_clock();
 
+	{
+		extern void lenovo_splash_status(int slot, const char *prefix, const char *val, u32 color);
+		extern void lenovo_splash_trace(const char *msg, u32 color);
+		lenovo_splash_status(7, "WATCHDOG", "BARK TIMEOUT!", 0xFFFF0000);
+		lenovo_splash_trace("[BARK] Watchdog Bark Timeout", 0xFFFF0000);
+	}
+
 	nanosec_rem = do_div(t, 1000000000);
 	dev_info(wdog_dd->dev, "Watchdog bark! Now = %lu.%06lu\n",
 			(unsigned long) t, nanosec_rem / 1000);

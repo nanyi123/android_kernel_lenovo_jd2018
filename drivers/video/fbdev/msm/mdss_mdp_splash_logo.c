@@ -246,10 +246,16 @@ int mdss_mdp_splash_cleanup(struct msm_fb_data_type *mfd,
 		if (mfd->splash_info.iommu_dynamic_attached &&
 			use_borderfill) {
 			mdss_mdp_splash_unmap_splash_mem(mfd);
+			pr_info("%s: free splash (branch1) addr=%x size=%x\n",
+				__func__, mdp5_data->splash_mem_addr,
+				mdp5_data->splash_mem_size);
 			memblock_free(mdp5_data->splash_mem_addr,
 					mdp5_data->splash_mem_size);
 			mdss_free_bootmem(mdp5_data->splash_mem_addr,
 					mdp5_data->splash_mem_size);
+			/* zero the address to make double-free impossible */
+			mdp5_data->splash_mem_addr = 0;
+			mdp5_data->splash_mem_size = 0;
 		}
 		goto end;
 	}
@@ -297,10 +303,16 @@ int mdss_mdp_splash_cleanup(struct msm_fb_data_type *mfd,
 	if (mdp5_data->splash_mem_addr &&
 		!mfd->splash_info.iommu_dynamic_attached) {
 		/* Give back the reserved memory to the system */
+		pr_info("%s: free splash (main) addr=%x size=%x\n",
+			__func__, mdp5_data->splash_mem_addr,
+			mdp5_data->splash_mem_size);
 		memblock_free(mdp5_data->splash_mem_addr,
-					mdp5_data->splash_mem_size);
+				mdp5_data->splash_mem_size);
 		mdss_free_bootmem(mdp5_data->splash_mem_addr,
-					mdp5_data->splash_mem_size);
+				mdp5_data->splash_mem_size);
+		/* zero the address to make double-free impossible */
+		mdp5_data->splash_mem_addr = 0;
+		mdp5_data->splash_mem_size = 0;
 	}
 
 	mdss_mdp_footswitch_ctrl_splash(0);
@@ -683,6 +695,9 @@ error:
 					mdp5_mdata->splash_mem_size);
 		mdss_free_bootmem(mdp5_mdata->splash_mem_addr,
 					mdp5_mdata->splash_mem_size);
+		/* zero the address to make double-free impossible */
+		mdp5_mdata->splash_mem_addr = 0;
+		mdp5_mdata->splash_mem_size = 0;
 	} else if (rc && mfd->panel_info->cont_splash_enabled) {
 		pr_err("no rsvd mem found in DT for splash screen\n");
 	} else {

@@ -4249,27 +4249,31 @@ void asus_typec_removal_function(struct smb_charger *chg)
 	if (rc < 0)
 		CHG_DBG_E("%s: Failed to set USBIN_OPTIONS_1_CFG_REG\n", __func__);
 
-	val = gpio_get_value(global_gpio->ADC_SW_EN);
-	if(val==1){
-		rc = gpio_direction_output(global_gpio->ADC_SW_EN, 0);
-		if (rc)
-			CHG_DBG_E("%s: failed to pull-low ADC_SW_EN-gpios59\n", __func__);
-		else
-			CHG_DBG("%s: Pull low USBSW_S\n", __func__);
-	} 
-	else
-		CHG_DBG("%s: get USBSW_S gpio val %d\n", __func__,val);
-		
-	val = gpio_get_value(global_gpio->ADCPWREN_PMI_GP1);
-	if(val==1){
-		rc = gpio_direction_output(global_gpio->ADCPWREN_PMI_GP1, 0);
-		if (rc)
-			CHG_DBG_E("%s: failed to pull-low ADCPWREN_PMI_GP1-gpios34\n", __func__);
-		else
-			CHG_DBG("%s: Pull low ADC_VH_EN\n", __func__);
+	if (global_gpio && gpio_is_valid(global_gpio->ADC_SW_EN)) {
+		val = gpio_get_value(global_gpio->ADC_SW_EN);
+		if(val==1){
+			rc = gpio_direction_output(global_gpio->ADC_SW_EN, 0);
+			if (rc)
+				CHG_DBG_E("%s: failed to pull-low ADC_SW_EN-gpios59\n", __func__);
+			else
+				CHG_DBG("%s: Pull low USBSW_S\n", __func__);
+		} else {
+			CHG_DBG("%s: get USBSW_S gpio val %d\n", __func__,val);
+		}
 	}
-	else
-		CHG_DBG("%s: get ADC_VH_EN gpio val %d\n", __func__,val);
+		
+	if (global_gpio && gpio_is_valid(global_gpio->ADCPWREN_PMI_GP1)) {
+		val = gpio_get_value(global_gpio->ADCPWREN_PMI_GP1);
+		if(val==1){
+			rc = gpio_direction_output(global_gpio->ADCPWREN_PMI_GP1, 0);
+			if (rc)
+				CHG_DBG_E("%s: failed to pull-low ADCPWREN_PMI_GP1-gpios34\n", __func__);
+			else
+				CHG_DBG("%s: Pull low ADC_VH_EN\n", __func__);
+		} else {
+			CHG_DBG("%s: get ADC_VH_EN gpio val %d\n", __func__,val);
+		}
+	}
 
 	
 	cancel_delayed_work(&chg->asus_chg_flow_work);
@@ -5221,12 +5225,14 @@ void asus_chg_flow_work(struct work_struct *work)
 		if (rc < 0)
 			CHG_DBG_E("%s: Failed to set CMD_APSD_REG\n", __func__);
 
-		rc = gpio_direction_output(global_gpio->ADC_SW_EN, 1);	//USB DPDM Switch to ADC(2D)
-		if (rc) {
-			CHG_DBG_E("%s: failed to pull-high ADC_SW_EN-gpios59\n", __func__);
-			break;
-		} else {
-			CHG_DBG("%s: Pull high USBSW_S\n", __func__);
+		if (global_gpio && gpio_is_valid(global_gpio->ADC_SW_EN)) {
+			rc = gpio_direction_output(global_gpio->ADC_SW_EN, 1);	//USB DPDM Switch to ADC(2D)
+			if (rc) {
+				CHG_DBG_E("%s: failed to pull-high ADC_SW_EN-gpios59\n", __func__);
+				break;
+			} else {
+				CHG_DBG("%s: Pull high USBSW_S\n", __func__);
+			}
 		}
 
 		if (HVDCP_FLAG == 0) {
@@ -5281,11 +5287,13 @@ void CHG_TYPE_judge(void)
 		CHG_DBG("vadc(%dmV), first read\n", vadc);
 
 	if (vadc <= VADC_THD_300MV) {
-		rc = gpio_direction_output(global_gpio->ADCPWREN_PMI_GP1, 1);
-		if (rc) {
-			CHG_DBG_E("%s: failed to pull-high ADCPWREN_PMI_GP1-gpios34\n", __func__);
-		} else {
-			CHG_DBG("%s: Pull high ADC_VH_EN\n", __func__);
+		if (global_gpio && gpio_is_valid(global_gpio->ADCPWREN_PMI_GP1)) {
+			rc = gpio_direction_output(global_gpio->ADCPWREN_PMI_GP1, 1);
+			if (rc) {
+				CHG_DBG_E("%s: failed to pull-high ADCPWREN_PMI_GP1-gpios34\n", __func__);
+			} else {
+				CHG_DBG("%s: Pull high ADC_VH_EN\n", __func__);
+			}
 		}
 		//#2: Delay 5ms
 		msleep(5);
@@ -5581,15 +5589,19 @@ void asus_adapter_adc_work(struct work_struct *work)
 		CHG_DBG_E("%s: Couldn't set 1340_USBIN_SUSPEND_BIT 0\n", __func__);
 
 	//Ara  close gpio in order +++
-	rc = gpio_direction_output(global_gpio->ADCPWREN_PMI_GP1, 0);
-	if (rc)
-		CHG_DBG_E("%s: failed to pull-low ADCPWREN_PMI_GP1-gpios%d\n",
-		__func__,(int)global_gpio->ADCPWREN_PMI_GP1);
+	if (global_gpio && gpio_is_valid(global_gpio->ADCPWREN_PMI_GP1)) {
+		rc = gpio_direction_output(global_gpio->ADCPWREN_PMI_GP1, 0);
+		if (rc)
+			CHG_DBG_E("%s: failed to pull-low ADCPWREN_PMI_GP1-gpios%d\n",
+			__func__,(int)global_gpio->ADCPWREN_PMI_GP1);
+	}
 	
-	rc = gpio_direction_output(global_gpio->ADC_SW_EN, 0);
-	if (rc)
-		CHG_DBG_E("%s: failed to pull-low ADC_SW_EN-gpios%d\n",
-		__func__,(int)global_gpio->ADC_SW_EN);
+	if (global_gpio && gpio_is_valid(global_gpio->ADC_SW_EN)) {
+		rc = gpio_direction_output(global_gpio->ADC_SW_EN, 0);
+		if (rc)
+			CHG_DBG_E("%s: failed to pull-low ADC_SW_EN-gpios%d\n",
+			__func__,(int)global_gpio->ADC_SW_EN);
+	}
 	//Ara  close gpio in order ---
 
 	//WeiYu ++ 18W modify from 0x4C to 0x54 for gps issue

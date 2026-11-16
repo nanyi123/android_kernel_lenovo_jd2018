@@ -3221,6 +3221,11 @@ static int ipa_generic_plat_drv_probe(struct platform_device *pdev_p)
 	pr_debug("ipa: IPA driver probing started for %s\n",
 		pdev_p->dev.of_node->name);
 
+	if (of_device_is_compatible(pdev_p->dev.of_node, "qcom,ipa")) {
+		pr_info("ipa: bypassing probe for %s\n", dev_name(&pdev_p->dev));
+		return -ENODEV;
+	}
+
 	if (!ipa_api_ctrl) {
 		ipa_api_ctrl = kzalloc(sizeof(*ipa_api_ctrl), GFP_KERNEL);
 		if (!ipa_api_ctrl)

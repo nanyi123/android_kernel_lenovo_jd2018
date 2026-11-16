@@ -269,6 +269,12 @@ static int lpi_gpio_set_mux(struct pinctrl_dev *pctldev, unsigned int function,
 		val &= ~(LPI_GPIO_REG_FUNCTION_MASK);
 		val |= pad->function << LPI_GPIO_REG_FUNCTION_SHIFT;
 		lpi_gpio_write(pad, LPI_GPIO_REG_VAL_CTL, val);
+		{
+			unsigned int rb = lpi_gpio_read(pad, LPI_GPIO_REG_VAL_CTL);
+			unsigned int rb_dir = lpi_gpio_read(pad, LPI_GPIO_REG_DIR_CTL);
+			pr_info("[AudioDBG-LPI] set_mux pin %u func %u wrote 0x%x readback 0x%x dir 0x%x off 0x%x\n",
+				pin, function, val, rb, rb_dir, pad->offset);
+		}
 	}
 	return 0;
 }

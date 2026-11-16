@@ -48,6 +48,246 @@
 #include <linux/tick.h>
 #include <linux/sched/isolation.h>
 #include <linux/interrupt.h>
+#include <linux/io.h>
+#include <linux/font.h>
+#include <linux/memblock.h>
+
+extern const struct font_desc font_vga_8x16;
+
+/*
+ * 案件五 (2026-11-08): 媒体播放→随机内存腐坏→重启 根因修复。
+ *
+ * splash 区 0x9d400000+36MB 在 mdss handover(~20s)后被 memblock_free 归还
+ * buddy 分配器，页面被重新分配为页表/内核栈/slab/用户堆。此后 lenovo_splash_*
+ * 取证写入(每 20s 心跳、每次 level<=5 的 printk、每次 panic/trap 钩子)都会把
+ * 彩色像素盖到新受让页上 = 随机内存腐坏
+ * (实测: PTE=0xff000000ff000000 像素模式、内核栈端魔数破坏、init SIGSEGV)。
+ *
+ * 修复: 所有写入前检查区域所有权——memblock 仍保留时(= splash 仍属内核/ABL)
+ * 才允许写；mdss 释放后永久静默。早期开机取证功能不受影响。
+ */
+static bool lenovo_splash_region_owned(void)
+{
+	return memblock_is_region_reserved(0x9d400000UL, 0x2400000UL);
+}
+
+void lenovo_splash_text(int x, int y, const char *str, u32 fg, u32 bg)
+{
+	unsigned long splash_phys = 0x9d400000;
+	size_t row_bytes = 1080 * 4;
+	const unsigned char *font = (const unsigned char *)font_vga_8x16.data;
+	int len = strlen(str);
+	int h = 32;
+	size_t offset = y * row_bytes;
+	size_t size = h * row_bytes;
+	void __iomem *vaddr;
+	int i, r, c;
+
+	if (!font)
+		return;
+
+	if (!lenovo_splash_region_owned())
+		return;
+
+	vaddr = ioremap_cache(splash_phys + offset, size);
+	if (!vaddr)
+		return;
+
+	for (i = 0; (x + i * 16 + 16) <= 1080 && i < 64; i++) {
+		unsigned char ch = (i < len) ? (unsigned char)str[i] : ' ';
+		const unsigned char *glyph = font + ch * 16;
+		for (r = 0; r < 16; r++) {
+			unsigned char bits = glyph[r];
+			u32 __iomem *line0 = (u32 __iomem *)vaddr + ((r * 2) * 1080) + x + (i * 16);
+			u32 __iomem *line1 = (u32 __iomem *)vaddr + ((r * 2 + 1) * 1080) + x + (i * 16);
+			for (c = 0; c < 8; c++) {
+				u32 color = (bits & (0x80 >> c)) ? fg : bg;
+				writel_relaxed(color, line0 + (c * 2));
+				writel_relaxed(color, line0 + (c * 2 + 1));
+				writel_relaxed(color, line1 + (c * 2));
+				writel_relaxed(color, line1 + (c * 2 + 1));
+			}
+		}
+	}
+	__iowmb();
+	iounmap(vaddr);
+}
+
+void lenovo_splash_box(int x, int y, int w, int h, u32 color)
+{
+}
+
+void lenovo_splash_bar_late(int start_row, int num_rows, u32 color)
+{
+}
+
+void lenovo_splash_clear(void)
+{
+	unsigned long splash_phys = 0x9d400000;
+	size_t row_bytes = 1080 * 4;
+	int row;
+
+	if (!lenovo_splash_region_owned())
+		return;
+
+	for (row = 0; row < 1800; row += 50) {
+		size_t offset = row * row_bytes;
+		size_t size = 50 * row_bytes;
+		void __iomem *vaddr = ioremap_cache(splash_phys + offset, size);
+		if (vaddr) {
+			memset_io(vaddr, 0, size);
+			__iowmb();
+			iounmap(vaddr);
+		}
+	}
+}
+
+void lenovo_splash_status(int slot, const char *prefix, const char *val, u32 color)
+{
+	char msg[64];
+	int y = 50 + slot * 34;
+	snprintf(msg, sizeof(msg), "%-8s: %s", prefix, val);
+	lenovo_splash_text(20, y, msg, color, 0xFF000000);
+}
+
+#define SPLASH_FB_PHYS		0x9d400000UL
+#define SPLASH_ROW_BYTES	(1080 * 4)
+#define SPLASH_TOP		420	/* 控制台首行 y */
+#define SPLASH_BOTTOM		1768	/* 最后一行 y (行高32, 底边1800内) */
+
+static void __iomem *splash_fb_base;
+static int splash_row = SPLASH_TOP;
+static int splash_col = 20;
+
+static void __iomem *splash_map_once(void)
+{
+	if (!splash_fb_base)
+		splash_fb_base = ioremap_cache(SPLASH_FB_PHYS, 1850 * SPLASH_ROW_BYTES);
+	return splash_fb_base;
+}
+
+/* 8x16 字形, 2x 缩放画在 (x,y), 行高32px 字宽16px */
+static void splash_glyph(void __iomem *fb, int x, int y, unsigned char ch, u32 fg, u32 bg)
+{
+	const unsigned char *font = (const unsigned char *)font_vga_8x16.data;
+	const unsigned char *glyph = font + ch * 16;
+	int r, c;
+
+	for (r = 0; r < 16; r++) {
+		unsigned char bits = glyph[r];
+		u32 __iomem *l0 = (u32 __iomem *)fb + (size_t)(y + r * 2) * 1080 + x;
+		u32 __iomem *l1 = (u32 __iomem *)fb + (size_t)(y + r * 2 + 1) * 1080 + x;
+		for (c = 0; c < 8; c++) {
+			u32 color = (bits & (0x80 >> c)) ? fg : bg;
+			writel_relaxed(color, l0 + c * 2);
+			writel_relaxed(color, l0 + c * 2 + 1);
+			writel_relaxed(color, l1 + c * 2);
+			writel_relaxed(color, l1 + c * 2 + 1);
+		}
+	}
+}
+
+/* 写满底部时整体上滚一行 */
+static void splash_scroll_up(void)
+{
+	size_t top = (size_t)SPLASH_TOP * SPLASH_ROW_BYTES;
+	size_t n = (size_t)(SPLASH_BOTTOM + 32 - SPLASH_TOP) * SPLASH_ROW_BYTES;
+
+	memmove((void __force *)splash_fb_base + top,
+		(void __force *)splash_fb_base + top + 32 * SPLASH_ROW_BYTES,
+		n - 32 * SPLASH_ROW_BYTES);
+	memset_io(splash_fb_base + (size_t)SPLASH_BOTTOM * SPLASH_ROW_BYTES,
+		  0, 32 * SPLASH_ROW_BYTES);
+}
+
+/* 滚动控制台: 自动换行 + 上滚 */
+void lenovo_splash_console(const char *msg, u32 color)
+{
+	void __iomem *fb = splash_fb_base;	/* 仅 start_kernel 显式映射后工作, 早期printk丢弃 */
+	const char *p;
+
+	/* 案件五: mdss handover 释放 splash 区后永久静默, 并解除驻留映射 */
+	if (!lenovo_splash_region_owned()) {
+		if (splash_fb_base) {
+			iounmap(splash_fb_base);
+			splash_fb_base = NULL;
+		}
+		return;
+	}
+
+	if (!fb)
+		return;
+
+	for (p = msg; *p; p++) {
+		unsigned char ch = (unsigned char)*p;
+
+		if (ch == '\n' || splash_col + 16 > 1080) {
+			splash_col = 20;
+			splash_row += 32;
+			if (splash_row > SPLASH_BOTTOM) {
+				splash_scroll_up();
+				splash_row = SPLASH_BOTTOM;
+			}
+			if (ch == '\n' || ch == '\r')
+				continue;
+		}
+		if (ch == '\r')
+			continue;
+		splash_glyph(fb, splash_col, splash_row, ch, color, 0xFF000000);
+		splash_col += 16;
+	}
+	__iowmb();
+}
+
+void lenovo_splash_trace_reset(void)
+{
+	unsigned long splash_phys = SPLASH_FB_PHYS;
+	size_t row_bytes = SPLASH_ROW_BYTES;
+	int row;
+
+	if (!lenovo_splash_region_owned())
+		return;
+
+	splash_row = SPLASH_TOP;
+	splash_col = 20;
+	for (row = SPLASH_TOP; row < SPLASH_BOTTOM + 32; row += 50) {
+		size_t offset = row * row_bytes;
+		size_t size = min(50, SPLASH_BOTTOM + 32 - row) * row_bytes;
+		void __iomem *vaddr = ioremap_cache(splash_phys + offset, size);
+		if (vaddr) {
+			memset_io(vaddr, 0, size);
+			__iowmb();
+			iounmap(vaddr);
+		}
+	}
+}
+
+void lenovo_splash_trace(const char *msg, u32 color)
+{
+	lenovo_splash_console(msg, color);
+}
+
+/* 心跳: 20s一行, 用于区分"内核定时器活着但用户态停了"与"内核整体楔死" */
+#include <linux/timer.h>
+static unsigned long splash_epoch_jiffies;
+static void splash_heartbeat_fn(struct timer_list *t);
+static DEFINE_TIMER(splash_heartbeat_timer, splash_heartbeat_fn);
+static void splash_heartbeat_fn(struct timer_list *t)
+{
+	unsigned long s = (jiffies - splash_epoch_jiffies) / HZ;
+	char buf[64];
+
+	scnprintf(buf, sizeof(buf), "[*] kernel alive, uptime=%lus", s);
+	lenovo_splash_console(buf, 0xFFFFFFFF);	/* 白色 */
+	mod_timer(&splash_heartbeat_timer, jiffies + 20 * HZ);
+}
+
+static void splash_heartbeat_start(void)
+{
+	splash_epoch_jiffies = jiffies;
+	mod_timer(&splash_heartbeat_timer, jiffies + 20 * HZ);
+}
+
 #include <linux/taskstats_kern.h>
 #include <linux/delayacct.h>
 #include <linux/unistd.h>
@@ -735,6 +975,18 @@ asmlinkage __visible void __init start_kernel(void)
 	sort_main_extable();
 	trap_init();
 	mm_init();
+	splash_map_once();	/* 控制台: 一次性映射 fb, 之后 printk 直接滚屏 */
+	splash_heartbeat_start();	/* 心跳计时器: 内核存活的时间轴 */
+	lenovo_splash_clear();
+	lenovo_splash_status(0, "SYSTEM", "Lenovo Z5 Android 14 crDroid", 0xFF00FFFF);
+	lenovo_splash_status(1, "KERNEL", "Linux 4.19.315 userdebug", 0xFFFFFFFF);
+	lenovo_splash_status(2, "STAGE", "mm_init & sched_init ready", 0xFFFFFF00);
+	lenovo_splash_status(3, "CALL", "start_kernel", 0xFF00FF00);
+	lenovo_splash_status(4, "PROBE", "None", 0xFF00FF00);
+	lenovo_splash_status(5, "ROOTFS", "Waiting...", 0xFFFFFFFF);
+	lenovo_splash_status(6, "INIT", "Waiting...", 0xFFFFFFFF);
+	lenovo_splash_status(7, "STATUS", "Booting...", 0xFF00FF00);
+	lenovo_splash_text(20, 390, "---------------- TRACE LOG (rolling) ----------------", 0xFF808080, 0xFF000000);
 
 	ftrace_init();
 
@@ -747,6 +999,7 @@ asmlinkage __visible void __init start_kernel(void)
 	 * time - but meanwhile we still have a functioning scheduler.
 	 */
 	sched_init();
+	lenovo_splash_bar_late(450, 50, 0xFFFF00FF); /* 阶段 6: 紫色 (调度器sched_init就绪) */
 	/*
 	 * Disable preemption - early bootup scheduling is extremely
 	 * fragile until we cpu_idle() for the first time.
@@ -789,6 +1042,7 @@ asmlinkage __visible void __init start_kernel(void)
 	softirq_init();
 	timekeeping_init();
 	time_init();
+	lenovo_splash_bar_late(500, 50, 0xFFFFA500); /* 阶段 7: 橙色 (时钟time_init就绪) */
 
 	/*
 	 * For best initial stack canary entropy, prepare it after:
@@ -1024,6 +1278,8 @@ static inline void do_trace_initcall_finish(initcall_t fn, int ret)
 }
 #endif /* !TRACEPOINTS_ENABLED */
 
+static int current_initcall_level = -1;
+
 int __init_or_module do_one_initcall(initcall_t fn)
 {
 	int count = preempt_count();
@@ -1033,9 +1289,24 @@ int __init_or_module do_one_initcall(initcall_t fn)
 	if (initcall_blacklisted(fn))
 		return -EPERM;
 
+	{
+		char fnmsg[64];
+		snprintf(fnmsg, sizeof(fnmsg), "%pS", fn);
+		lenovo_splash_status(3, "CALL", fnmsg, 0xFF00FF00);
+		if (current_initcall_level >= 6) {
+			lenovo_splash_trace(fnmsg, 0xFFFFFFFF);
+		}
+	}
+
 	do_trace_initcall_start(fn);
 	ret = fn();
 	do_trace_initcall_finish(fn, ret);
+
+	if (ret && current_initcall_level >= 6) {
+		char retmsg[64];
+		snprintf(retmsg, sizeof(retmsg), "%pS err=%d", fn, ret);
+		lenovo_splash_trace(retmsg, 0xFFFFA500);
+	}
 
 	msgbuf[0] = 0;
 
@@ -1093,6 +1364,8 @@ static void __init do_initcall_level(int level)
 {
 	initcall_entry_t *fn;
 
+	current_initcall_level = level;
+
 	strcpy(initcall_command_line, saved_command_line);
 	parse_args(initcall_level_names[level],
 		   initcall_command_line, __start___param,
@@ -1101,6 +1374,12 @@ static void __init do_initcall_level(int level)
 		   NULL, &repair_env_string);
 
 	trace_initcall_level(initcall_level_names[level]);
+	{
+		char lvlmsg[64];
+		snprintf(lvlmsg, sizeof(lvlmsg), "Init level %d (%s)...", level, initcall_level_names[level]);
+		lenovo_splash_status(2, "STAGE", lvlmsg, 0xFFFFFF00);
+		lenovo_splash_trace(lvlmsg, 0xFF00FFFF);
+	}
 	for (fn = initcall_levels[level]; fn < initcall_levels[level+1]; fn++)
 		do_one_initcall(initcall_from_entry(fn));
 }
@@ -1214,7 +1493,9 @@ static int __ref kernel_init(void *unused)
 {
 	int ret;
 
+	lenovo_splash_bar_late(550, 50, 0xFFFFFFFF); /* 阶段 8: 白色 (驱动模型探测开始) */
 	kernel_init_freeable();
+	lenovo_splash_bar_late(980, 20, 0xFF800080); /* 980 深紫: 驱动探测完毕，准备移交 userspace */
 	/* need to finish all async __init code before freeing the memory */
 	async_synchronize_full();
 	ftrace_free_init_mem();
@@ -1234,9 +1515,18 @@ static int __ref kernel_init(void *unused)
 	rcu_end_inkernel_boot();
 
 	if (ramdisk_execute_command) {
+		lenovo_splash_status(6, "INIT", "EXEC /init (Android 14)", 0xFF00FF00);
+		lenovo_splash_trace_reset();
+		lenovo_splash_trace("[INIT] Calling run_init_process(/init)...", 0xFF00FF00);
 		ret = run_init_process(ramdisk_execute_command);
 		if (!ret)
 			return 0;
+		{
+			char failmsg[64];
+			snprintf(failmsg, sizeof(failmsg), "EXEC FAILED (ret=%d)", ret);
+			lenovo_splash_status(6, "INIT", failmsg, 0xFFFF0000);
+			lenovo_splash_trace(failmsg, 0xFFFF0000);
+		}
 		pr_err("Failed to execute %s (error %d)\n",
 		       ramdisk_execute_command, ret);
 	}
@@ -1266,6 +1556,7 @@ static int __ref kernel_init(void *unused)
 
 static noinline void __init kernel_init_freeable(void)
 {
+	lenovo_splash_bar_late(600, 20, 0xFF00FF00); /* 600 亮绿: 等待 kthreadd */
 	/*
 	 * Wait until kthreadd is all set-up.
 	 */
@@ -1290,14 +1581,18 @@ static noinline void __init kernel_init_freeable(void)
 	do_pre_smp_initcalls();
 	lockup_detector_init();
 
+	lenovo_splash_bar_late(625, 20, 0xFF00FFFF); /* 625 青色: 即将 smp_init (拉起多核) */
 	smp_init();
+	lenovo_splash_bar_late(650, 20, 0xFF0000FF); /* 650 蓝色: 多核全部就绪! */
 	sched_init_smp();
 
 	page_alloc_init_late();
 	/* Initialize page ext after all struct pages are initialized. */
 	page_ext_init();
 
+	lenovo_splash_bar_late(675, 20, 0xFFFF00FF); /* 675 紫色: 进入 do_basic_setup (准备驱动初始化) */
 	do_basic_setup();
+	lenovo_splash_bar_late(900, 20, 0xFFFFFFFF); /* 900 白色: do_basic_setup (所有驱动) 全部完成! */
 
 	/* Open the /dev/console on the rootfs, this should never fail */
 	if (ksys_open((const char __user *) "/dev/console", O_RDWR, 0) < 0)
@@ -1305,6 +1600,9 @@ static noinline void __init kernel_init_freeable(void)
 
 	(void) ksys_dup(0);
 	(void) ksys_dup(0);
+
+	lenovo_splash_bar_late(920, 20, 0xFFFFA500); /* 920 橙色: console 就绪，检查 /init */
+
 	/*
 	 * check if there is an early userspace init.  If yes, let it do all
 	 * the work
@@ -1315,8 +1613,13 @@ static noinline void __init kernel_init_freeable(void)
 
 	if (ksys_access((const char __user *)
 			ramdisk_execute_command, 0) != 0) {
+		lenovo_splash_status(6, "INIT", "NOT FOUND!", 0xFFFF0000);
+		lenovo_splash_trace("[INIT] Error: /init NOT FOUND!", 0xFFFF0000);
 		ramdisk_execute_command = NULL;
 		prepare_namespace();
+	} else {
+		lenovo_splash_status(6, "INIT", "/init FOUND READY!", 0xFF00FF00);
+		lenovo_splash_trace("[INIT] /init verified ready in rootfs", 0xFF00FF00);
 	}
 
 	/*
@@ -1330,4 +1633,5 @@ static noinline void __init kernel_init_freeable(void)
 
 	integrity_load_keys();
 	load_default_modules();
+	lenovo_splash_bar_late(960, 20, 0xFF00FFFF); /* 960 青色: kernel_init_freeable 准备返回 */
 }
