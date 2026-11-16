@@ -1891,6 +1891,24 @@ out:
 static ssize_t reclaim_write(struct file *file, const char __user *buf,
 				size_t count, loff_t *ppos)
 {
+	/*
+	 * jd2018 port: process reclaim is disabled on purpose.
+	 *
+	 * QC's legacy CONFIG_PROCESS_RECLAIM implementation isolates pages
+	 * without holding the page lock (reclaim_pte_range -> isolate_lru_page),
+	 * so a concurrent fault on a shared shmem/file page can put the page
+	 * back on the LRU while it sits in the reclaim list.  shrink_page_list()
+	 * then hits VM_BUG_ON_PAGE(PageLRU(page)) at keep: and panics
+	 * (observed: system_server CachedAppOptimizer writing /proc/<pid>/reclaim
+	 * -> kernel BUG at mm/vmscan.c:1519 -> spontaneous reboot).
+	 *
+	 * 4.19 has no process_madvise() replacement, so instead of fixing the
+	 * race we neuter the interface: writes succeed as a no-op so callers
+	 * (CachedAppOptimizer compactProcessProcfs) behave gracefully.
+	 */
+	return count;
+
+#if 0
 	struct task_struct *task;
 	char buffer[200];
 	struct mm_struct *mm;
@@ -2013,6 +2031,7 @@ out:
 
 out_err:
 	return -EINVAL;
+#endif /* jd2018: process reclaim neutered, see comment at top of function */
 }
 
 const struct file_operations proc_reclaim_operations = {

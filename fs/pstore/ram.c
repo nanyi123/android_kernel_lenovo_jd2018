@@ -39,29 +39,30 @@
 #define RAMOOPS_KERNMSG_HDR "===="
 #define MIN_MEM_SIZE 4096UL
 
-static ulong record_size = MIN_MEM_SIZE;
+static ulong record_size = 0x40000;  /* 256KB/dump记录, panic dump 覆盖整个 kmsg */
 module_param(record_size, ulong, 0400);
 MODULE_PARM_DESC(record_size,
 		"size of each dump done on oops/panic");
 
-static ulong ramoops_console_size = MIN_MEM_SIZE;
+static ulong ramoops_console_size = 0x40000;  /* 256KB console, 空间让给 dump */
 module_param_named(console_size, ramoops_console_size, ulong, 0400);
 MODULE_PARM_DESC(console_size, "size of kernel console log");
 
-static ulong ramoops_ftrace_size = MIN_MEM_SIZE;
+static ulong ramoops_ftrace_size = 0;
 module_param_named(ftrace_size, ramoops_ftrace_size, ulong, 0400);
 MODULE_PARM_DESC(ftrace_size, "size of ftrace log");
 
-static ulong ramoops_pmsg_size = MIN_MEM_SIZE;
+static ulong ramoops_pmsg_size = 0;  /* pmsg 关闭, 预算留给 console+dump */
 module_param_named(pmsg_size, ramoops_pmsg_size, ulong, 0400);
 MODULE_PARM_DESC(pmsg_size, "size of user space message log");
 
-static unsigned long long mem_address;
+/* jd2018: 原厂 DTB pstore_region@0xaff00000 (1MB no-map), 按原厂位置来 */
+static unsigned long long mem_address = 0xaff00000ULL;
 module_param_hw(mem_address, ullong, other, 0400);
 MODULE_PARM_DESC(mem_address,
 		"start of reserved RAM used to store oops/panic logs");
 
-static ulong mem_size;
+static ulong mem_size = 0x100000;  /* 1MB, 与原厂 DTB pstore_region 一致 */
 module_param(mem_size, ulong, 0400);
 MODULE_PARM_DESC(mem_size,
 		"size of reserved RAM used to store oops/panic logs");
@@ -738,8 +739,12 @@ static int ramoops_probe(struct platform_device *pdev)
 		memset(pdata, 0, sizeof(*pdata));
 
 		err = ramoops_parse_dt(pdev, pdata);
-		if (err < 0)
+		if (err < 0) {
+			pr_err("ramoops-dbg: parse_dt failed %d\n", err);
 			goto fail_out;
+		}
+	} else if (!pdata) {
+		pr_err("ramoops-dbg: probe %s no pdata no dt\n", dev_name(dev));
 	}
 
 	/*

@@ -2626,30 +2626,7 @@ void asus_probe_pmic_settings(struct smb_charger *chg)
 
 //ASUS BSP : Request ADC_SW_EN, ADCPWREN_PMI_GP1 +++
 void asus_regist_adc_gpios(struct platform_device *pdev){
-
-	struct gpio_control *gpio_ctrl= global_gpio;
-	int rc=0;
-	
-	gpio_ctrl->ADC_SW_EN = of_get_named_gpio(pdev->dev.of_node, "ADC_SW_EN-gpios59", 0);
-	rc = gpio_request(gpio_ctrl->ADC_SW_EN, "ADC_SW_EN-gpios59");
-	if (rc)
-		CHG_DBG_E("%s: failed to request ADC_SW_EN-gpios59\n", __func__);
-	else
-		CHG_DBG("%s: Success to request ADC_SW_EN-gpios59 %d\n", __func__,(int)gpio_ctrl->ADC_SW_EN);
-
-	gpio_ctrl->ADCPWREN_PMI_GP1 = of_get_named_gpio(pdev->dev.of_node, "ADCPWREN_PMI_GP1-gpios34", 0);
-	rc = gpio_request(gpio_ctrl->ADCPWREN_PMI_GP1, "ADCPWREN_PMI_GP1-gpios34");
-	if (rc)
-		CHG_DBG_E("%s: failed to request ADCPWREN_PMI_GP1-gpios34\n", __func__);
-	else
-		CHG_DBG("%s: Success to request ADCPWREN_PMI_GP1-gpios34 %d\n", __func__,(int)gpio_ctrl->ADCPWREN_PMI_GP1);
-
-	if(!rc)
-		gpio_direction_output(gpio_ctrl->ADCPWREN_PMI_GP1, 0);
-	rc = gpio_get_value(gpio_ctrl->ADCPWREN_PMI_GP1);
-	CHG_DBG("ADCPWREN_PMI_GP1 init H/L %d\n",rc);
-
-
+	/* No Asus ADC switch GPIOs on Lenovo Z5 */
 }
 //ASUS BSP : Request ADC_SW_EN, ADCPWREN_PMI_GP1 ---
 
@@ -2670,6 +2647,8 @@ static int smb2_probe(struct platform_device *pdev)
 	gpio_ctrl = devm_kzalloc(&pdev->dev, sizeof(*gpio_ctrl), GFP_KERNEL);
 	if (!gpio_ctrl)
 		return -ENOMEM;
+	gpio_ctrl->ADC_SW_EN = -1;
+	gpio_ctrl->ADCPWREN_PMI_GP1 = -1;
 //ASUS BSP allocate GPIO control ---
 
 	chg = &chip->chg;

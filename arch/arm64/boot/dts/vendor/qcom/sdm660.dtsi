@@ -1979,6 +1979,9 @@
 
 	pil_modem: qcom,mss@4080000 {
 		compatible = "qcom,pil-q6v55-mss";
+		/* 对齐联想原厂: SFR 死因码 + minidump，缺失时 modem fatal 原因被静默丢弃 */
+		qcom,smem-id = <421>;
+		qcom,minidump-id = <0x0>;
 		reg = <0x4080000 0x100>,
 		      <0x1f63000 0x008>,
 		      <0x1f65000 0x008>,

@@ -418,8 +418,7 @@ sda660-cdp-external-codec-overlay.dtbo-base := sda660-pm660l.dtb
 sda660-rcm-external-codec-overlay.dtbo-base := sda660-pm660l.dtb
 else
 ifeq ($(CONFIG_ASUS_ZE620KL_PROJECT),y)
-dtb-y += sdm636-qrd-X00QD.dtb \
-		 sdm636-qrd-oc-X00QD.dtb
+dtb-y += sdm636-qrd-jd2018.dtb
 else
 dtb-$(CONFIG_ARCH_SDM660) += sdm660-sim.dtb \
 sdm660-internal-codec-cdp.dtb \

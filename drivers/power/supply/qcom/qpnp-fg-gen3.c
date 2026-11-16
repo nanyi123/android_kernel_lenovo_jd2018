@@ -326,6 +326,14 @@ int fake_temp = FAKE_TEMP_INIT;
 #define	BATTERY_SAFETY_UPGRADE_TIME 1*60
 
 static bool g_cyclecount_initialized = false;
+/*
+ * jd2018: 默认关闭 ASUS 电池保养统计（battery_safety_work）。
+ * 该功能每 60 秒调 write_back_cycle_count_data()：往 /asdf/{Batpercentage,
+ * Batcyclecount,bat_safety} 备份（联想固件无 /asdf，必然 ENOENT 刷 pr_err），
+ * 并裸写 asuskey3 分区（eMMC 磨损）。它只做保养统计，不含过温/过压保护
+ * （那是 QCOM charger 的 JEITA，不受影响）。保持关闭即等价于现状减去噪音。
+ */
+static bool g_battery_safety_enable = false;
 extern bool rtc_probe_done;
 static struct CYCLE_COUNT_DATA g_cycle_count_data = {
     .magic = CYCLE_COUNT_DATA_MAGIC,
@@ -354,7 +362,14 @@ static bool g_bathealth_initialized = false;
 static bool g_bathealth_trigger = false;
 static bool g_last_bathealth_trigger = false;
 static bool g_health_debug_enable = false;
-static bool g_health_upgrade_enable = true;
+/*
+ * jd2018: 默认关闭 ASUS 电池健康统计。
+ * 该功能依赖 /asdf/bat_health_binary（ASUS 调试目录，联想固件里不存在）与
+ * SD 卡上的 /APD/.bh，resotre 失败后 g_bathealth_initialized 永远为 false，
+ * 导致每 1 秒重试一次并打两条 pr_err（每秒一次 workqueue 唤醒）。
+ * 可用 /proc/Batt_Cycle_Count/batt_safety_csc 写 "8 0" 重新开启。
+ */
+static bool g_health_upgrade_enable = false;
 static int g_health_upgrade_index = 0;
 static int g_health_upgrade_start_level = BAT_HEALTH_START_LEVEL;
 static int g_health_upgrade_end_level = BAT_HEALTH_END_LEVEL;
@@ -4297,6 +4312,9 @@ void battery_safety_upgrade_data_polling(int time) {
 
 void battery_safety_worker(struct work_struct *work)
 {
+	if (g_battery_safety_enable != true)
+		return; /* jd2018: 关闭时不重排，避免每秒/每分钟噪音与分区写入 */
+
 	update_battery_safe(g_fgDev);
 	battery_safety_upgrade_data_polling(BATTERY_SAFETY_UPGRADE_TIME); // update each hour
 }
@@ -4498,6 +4516,9 @@ void battery_health_upgrade_data_polling(int time) {
 
 void battery_health_worker(struct work_struct *work)
 {
+	if (g_health_upgrade_enable != true)
+		return; /* jd2018: 关闭时不重排，避免每秒空转 */
+
 	update_battery_health(g_fgDev);
 	battery_health_upgrade_data_polling(g_health_upgrade_upgrade_time);
 }
@@ -7078,6 +7099,9 @@ static void batt_health_upgrade_debug_enable(bool enable){
 static void batt_health_upgrade_enable(bool enable){
 
 	g_health_upgrade_enable = enable;
+	/* jd2018: worker 关闭后不再自行重排，重新开启时需手动挂回 */
+	if (enable)
+		battery_health_upgrade_data_polling(g_health_upgrade_upgrade_time);
 	BAT_DBG("%s: %d\n",__FUNCTION__,g_health_upgrade_enable);
 }
 
@@ -7645,7 +7669,8 @@ static int fg_gen3_probe(struct platform_device *pdev)
 	//init_batt_cycle_count_data();
 	create_batt_cycle_count_proc_file();
 	register_reboot_notifier(&reboot_blk);
-	schedule_delayed_work(&battery_safety_work, 30 * HZ);
+	if (g_battery_safety_enable)
+		schedule_delayed_work(&battery_safety_work, 30 * HZ);
 	//ASUS_BSP battery safety upgrade ---
 
 	//ASUS_BSP display callback function +++

@@ -1952,6 +1952,9 @@ int msm_pcm_routing_reg_phy_stream(int fedai_id, int perf_mode,
 					    perf_mode, bits_per_sample,
 					    app_type, acdb_dev_id,
 					    session_type, passthr_mode);
+			pr_info("[AudioDBG-RT] adm_open fe %d sess %d be %d port 0x%x copp %d sr %d ch %d app %u\n",
+				fedai_id, session_type, i, port_id, copp_idx,
+				sample_rate, channels, app_type);
 			if ((copp_idx < 0) ||
 				(copp_idx >= MAX_COPPS_PER_PORT)) {
 				pr_err("%s: adm open failed copp_idx:%d\n",

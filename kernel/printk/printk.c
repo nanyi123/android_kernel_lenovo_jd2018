@@ -837,6 +837,18 @@ static ssize_t devkmsg_write(struct kiocb *iocb, struct iov_iter *from)
 		}
 	}
 
+	{
+		extern void lenovo_splash_trace(const char *msg, u32 color);
+		char kmsg_line[80];
+		char *nl;
+		snprintf(kmsg_line, sizeof(kmsg_line), "[U] %s", line);
+		nl = strchr(kmsg_line, '\n');
+		if (nl)
+			*nl = '\0';
+		if (level <= 3)
+			lenovo_splash_trace(kmsg_line, 0xFFFF0000);
+	}
+
 	printk_emit(facility, level, NULL, 0, "%s", line);
 free:
 	return ret;
@@ -1927,6 +1939,15 @@ int vprintk_store(int facility, int level,
 
 	if (dict)
 		lflags |= LOG_PREFIX|LOG_NEWLINE;
+
+	{
+		/* 屏幕滚动控制台: err及以上级别 + 无显式前缀的关键行(dump_stack/panic)上屏 */
+		extern void lenovo_splash_console(const char *msg, u32 color);
+		if (level <= 5)
+			lenovo_splash_console(text,
+				(level <= 3) ? 0xFFFF0000 :
+				(level == 4) ? 0xFFFFA500 : 0xFFFFFF00);
+	}
 
 	return log_output(facility, level, lflags,
 			  dict, dictlen, text, text_len);

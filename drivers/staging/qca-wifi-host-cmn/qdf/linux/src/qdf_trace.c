@@ -3151,8 +3151,7 @@ void qdf_trace_msg_cmn(unsigned int idx,
 #if defined(WLAN_LOGGING_SOCK_SVC_ENABLE)
 		wlan_log_to_user(verbose, (char *)str_buffer,
 				 strlen(str_buffer));
-		if (qdf_likely(qdf_log_dump_at_kernel_enable))
-			print_to_console(str_buffer);
+		print_to_console(str_buffer);
 #else
 		pr_err("%s\n", str_buffer);
 #endif
@@ -3426,15 +3425,15 @@ static void set_default_trace_levels(struct category_info *cinfo)
 		[QDF_MODULE_ID_TLSHIM] = QDF_TRACE_LEVEL_NONE,
 		[QDF_MODULE_ID_WMI] = QDF_TRACE_LEVEL_ERROR,
 		[QDF_MODULE_ID_HTT] = QDF_TRACE_LEVEL_NONE,
-		[QDF_MODULE_ID_HDD] = QDF_TRACE_LEVEL_NONE,
-		[QDF_MODULE_ID_SME] = QDF_TRACE_LEVEL_NONE,
-		[QDF_MODULE_ID_PE] = QDF_TRACE_LEVEL_NONE,
-		[QDF_MODULE_ID_WMA] = QDF_TRACE_LEVEL_NONE,
-		[QDF_MODULE_ID_SYS] = QDF_TRACE_LEVEL_NONE,
+		[QDF_MODULE_ID_HDD] = QDF_TRACE_LEVEL_ERROR,
+		[QDF_MODULE_ID_SME] = QDF_TRACE_LEVEL_ERROR,
+		[QDF_MODULE_ID_PE] = QDF_TRACE_LEVEL_ERROR,
+		[QDF_MODULE_ID_WMA] = QDF_TRACE_LEVEL_ERROR,
+		[QDF_MODULE_ID_SYS] = QDF_TRACE_LEVEL_ERROR,
 		[QDF_MODULE_ID_QDF] = QDF_TRACE_LEVEL_ERROR,
 		[QDF_MODULE_ID_SAP] = QDF_TRACE_LEVEL_NONE,
-		[QDF_MODULE_ID_HDD_SOFTAP] = QDF_TRACE_LEVEL_NONE,
-		[QDF_MODULE_ID_HDD_DATA] = QDF_TRACE_LEVEL_NONE,
+		[QDF_MODULE_ID_HDD_SOFTAP] = QDF_TRACE_LEVEL_ERROR,
+		[QDF_MODULE_ID_HDD_DATA] = QDF_TRACE_LEVEL_ERROR,
 		[QDF_MODULE_ID_HDD_SAP_DATA] = QDF_TRACE_LEVEL_NONE,
 		[QDF_MODULE_ID_HIF] = QDF_TRACE_LEVEL_ERROR,
 		[QDF_MODULE_ID_HTC] = QDF_TRACE_LEVEL_NONE,
@@ -3447,7 +3446,7 @@ static void set_default_trace_levels(struct category_info *cinfo)
 		[QDF_MODULE_ID_DP] = QDF_TRACE_LEVEL_FATAL,
 		[QDF_MODULE_ID_HAL] = QDF_TRACE_LEVEL_NONE,
 		[QDF_MODULE_ID_SOC] = QDF_TRACE_LEVEL_NONE,
-		[QDF_MODULE_ID_OS_IF] = QDF_TRACE_LEVEL_NONE,
+		[QDF_MODULE_ID_OS_IF] = QDF_TRACE_LEVEL_ERROR,
 		[QDF_MODULE_ID_TARGET_IF] = QDF_TRACE_LEVEL_INFO,
 		[QDF_MODULE_ID_SCHEDULER] = QDF_TRACE_LEVEL_NONE,
 		[QDF_MODULE_ID_MGMT_TXRX] = QDF_TRACE_LEVEL_NONE,
@@ -3846,7 +3845,12 @@ qdf_export_symbol(qdf_get_pidx);
 #ifdef CONFIG_SLUB_DEBUG
 void __qdf_bug(void)
 {
-	BUG();
+	/* jd2018 bringup: WARN instead of BUG to avoid kernel panic bootloop
+	 * when qcacld hits firmware/driver version mismatches (e.g. TLV
+	 * mismatch on WMI_SERVICE_READY_EXT_EVENT). Driver error paths are
+	 * designed to continue and return E_INVAL after this call.
+	 */
+	WARN_ON(1);
 }
 qdf_export_symbol(__qdf_bug);
 #endif /* CONFIG_SLUB_DEBUG */

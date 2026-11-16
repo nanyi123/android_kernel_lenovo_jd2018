@@ -553,6 +553,21 @@ wmitlv_check_and_pad_tlvs(void *os_handle, void *param_struc_ptr,
 	wmi_tlv_OS_MEMZERO(cmd_param_tlvs_ptr, len_wmi_cmd_struct_buf);
 	remaining_expected_tlvs = attr_struct_ptr.cmd_num_tlv;
 
+	/* jd2018 bringup debug: hex dump of service_ready_ext event payload */
+	if (wmi_cmd_event_id == 0x4009 && !is_cmd_id) {
+		uint32_t dbg_i, dbg_n = param_buf_len > 800 ? 800 : param_buf_len;
+		wmi_tlv_print_error
+			("%s: JDDBG cmd=0x%x len=%d num_tlv=%d raw:",
+			__func__, wmi_cmd_event_id, param_buf_len,
+			attr_struct_ptr.cmd_num_tlv);
+		for (dbg_i = 0; dbg_i < dbg_n; dbg_i++) {
+			if (dbg_i % 16 == 0)
+				pr_err("JDDBG %04x:", dbg_i);
+			pr_cont(" %02x", ((uint8_t *)param_struc_ptr)[dbg_i]);
+		}
+		pr_cont("\n");
+	}
+
 	while (((buf_idx + WMI_TLV_HDR_SIZE) <= param_buf_len)
 	       && (remaining_expected_tlvs)) {
 		uint32_t curr_tlv_tag =
@@ -566,6 +581,19 @@ wmitlv_check_and_pad_tlvs(void *os_handle, void *param_struc_ptr,
 			wmi_tlv_print_error("%s: TLV length overflow",
 					    __func__);
 			goto Error_wmitlv_check_and_pad_tlvs;
+		}
+
+		/* jd2018 bringup: legacy fw generations end the TLV stream
+		 * early and zero-pad the rest of the event buffer. An all-zero
+		 * TLV header means end-of-stream, not a tag mismatch. Leave
+		 * the remaining (optional) TLV pointers NULL; the extraction
+		 * APIs already tolerate absent TLVs.
+		 */
+		if (curr_tlv_tag == 0 && curr_tlv_len == 0) {
+			wmi_tlv_print_error
+				("%s: zero TLV header at idx=%u for Cmd=0x%x, treating as end-of-stream\n",
+				__func__, tlv_index, wmi_cmd_event_id);
+			break;
 		}
 
 		/* Get the attributes of the TLV with the given order in "tlv_index" */
@@ -584,6 +612,12 @@ wmitlv_check_and_pad_tlvs(void *os_handle, void *param_struc_ptr,
 		wmi_tlv_print_verbose("%s: [tlv %d]: tag=%d, len=%d\n",
 				      __func__, tlv_index, curr_tlv_tag,
 				      curr_tlv_len);
+		if (wmi_cmd_event_id == 0x4009 && !is_cmd_id)
+			wmi_tlv_print_error
+				("%s: JDDBG2 idx=%u got_tag=%u got_len=%u expect_tag=%u struct_size=%u",
+				__func__, tlv_index, curr_tlv_tag, curr_tlv_len,
+				attr_struct_ptr.tag_id,
+				attr_struct_ptr.tag_struct_size);
 
 		/* Validating Tag order */
 		if (curr_tlv_tag != attr_struct_ptr.tag_id) {
