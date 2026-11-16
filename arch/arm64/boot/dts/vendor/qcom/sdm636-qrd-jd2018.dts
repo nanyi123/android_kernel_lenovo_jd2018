@@ -1,0 +1,102 @@
+/* SPDX-License-Identifier: GPL-2.0 */
+/*
+ * Copyright (c) 2017, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2024, Lenovo Z5 (jd2018) Bringup Project.
+ */
+
+/dts-v1/;
+
+#include "sdm636.dtsi"
+#include "sdm636-qrd.dtsi"
+#include "sdm660-internal-codec.dtsi"
+
+#include "jd2018/overlay.dtsi"
+#include "jd2018/sdm636-qrd-overlay.dtsi"
+#include "jd2018/sdm660-external-codec-overlay.dtsi"
+#include "jd2018/dsi-panel-auo-ft8716f-1080p-video.dtsi"
+#include "jd2018/dsi-panel-ft8719-1080p-video.dtsi"
+#include "jd2018/dsi-panel-nt36672a-1080p-video.dtsi"
+
+/ {
+	model = "Lenovo Z5 (jd2018) Qualcomm SDM 636 PM660 + PM660L QRD";
+	compatible = "lenovo,jd2018", "qcom,sdm636-qrd", "qcom,sdm636", "qcom,qrd";
+	qcom,msm-id = <0x159 0x0>, <0x15a 0x0>, <0x13d 0x0>;
+	qcom,board-id = <0x1000b 0x0>, <0x8 0x0>, <0xb 0x0>, <0x3f 0x0>;
+	qcom,pmic-id = <0x0001001b 0x0101011a 0x0 0x0>,
+			<0x0001001b 0x0201011a 0x0 0x0>,
+			<0x0001001b 0x0102001a 0x0 0x0>;
+
+	reserved-memory {
+		/delete-node/ removed_regions@86200000;
+		removed_regions: removed_regions@85800000 {
+			compatible = "removed-dma-pool";
+			no-map;
+			reg = <0x0 0x85800000 0x0 0x5300000>;
+		};
+
+		pstore_region@aff00000 {
+			compatible = "removed-dma-pool";
+			no-map;
+			reg = <0x0 0xaff00000 0x0 0x100000>;
+		};
+
+		buffer_region@94a00000 {
+			compatible = "removed-dma-pool";
+			no-map;
+			reg = <0x0 0x94a00000 0x0 0x100000>;
+		};
+	};
+};
+
+&mdss_mdp {
+	qcom,mdss-pref-prim-intf = "dsi";
+};
+
+&mdss_dsi {
+	hw-config = "single_dsi";
+};
+
+&mdss_dsi0 {
+	qcom,dsi-pref-prim-pan = <&dsi_auo_ft8716f_1080p_video>;
+	pinctrl-names = "mdss_default", "mdss_sleep";
+	pinctrl-0 = <&mdss_dsi_active &mdss_te_active>;
+	pinctrl-1 = <&mdss_dsi_suspend &mdss_te_suspend>;
+	qcom,platform-reset-gpio = <&tlmm 53 0>;
+	qcom,platform-te-gpio = <&tlmm 59 0>;
+};
+
+&pm660l_wled {
+	qcom,led-strings-list = [01 02];
+};
+
+&soc {
+	hbtp {
+		compatible = "qcom,hbtp-input";
+		pinctrl-names = "pmx_ts_active", "pmx_ts_suspend";
+		pinctrl-0 = <&ts_rst_active>;
+		pinctrl-1 = <&ts_rst_suspend>;
+		vcc_ana-supply = <&pm660l_l3>;
+		vcc_dig-supply = <&pm660_l13>;
+		qcom,afe-load = <20000>;
+		qcom,afe-vtg-min = <3008000>;
+		qcom,afe-vtg-max = <3008000>;
+		qcom,dig-load = <40000>;
+		qcom,dig-vtg-min = <1808000>;
+		qcom,dig-vtg-max = <1808000>;
+		qcom,fb-resume-delay-us = <10000>;
+		qcom,afe-force-power-on;
+		qcom,afe-power-on-delay-us = <1000>;
+		qcom,afe-power-off-delay-us = <6>;
+	};
+};
+
+&soc {
+	qcom,rmnet-ipa {
+		status = "disabled";
+	};
+};
+
+&ipa_hw {
+	status = "disabled";
+};
+
