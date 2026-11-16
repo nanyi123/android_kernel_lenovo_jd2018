@@ -1,0 +1,152 @@
+/* SPDX-License-Identifier: GPL-2.0 */
+
+/ {
+cpus {
+	cpu@0 {
+		efficiency = <618>;
+		capacity-dmips-mhz = <618>;
+	};
+
+	cpu@4 {
+		efficiency = <1024>;
+		capacity-dmips-mhz = <1024>;
+	};
+};
+
+energy_costs: energy-costs {
+	compatible = "sched-energy";
+
+	CPU_COST_0: core-cost0 {
+		busy-cost-data = <
+			  633600   43
+			  902400   62
+			 1113600   80
+			 1401600  123
+			 1536000  144
+			 1612800  160
+		>;
+		idle-cost-data = <
+			3 2 1
+		>;
+	};
+
+	CPU_COST_1: core-cost1 {
+		busy-cost-data = <
+			 1113600  232
+			 1401600  326
+			 1747200  488
+			 1804800  510
+		>;
+		idle-cost-data = <
+			3 2 1
+		>;
+	};
+};
+
+	reserved-memory {
+		ramoops {
+			compatible = "removed-dma-pool", "ramoops";
+			no-map;
+			reg = <0x0 0x94b00000 0x0 0x400000>;
+			console-size = <0x200000>;
+			pmsg-size = <0x200000>;
+			status = "ok";
+		};
+
+		cont_splash_mem: splash_region@9d400000 {
+			reg = <0x0 0x9d400000 0x0 0x023ff000>;
+			label = "cont_splash_mem";
+		};
+
+		/* dfps_data_mem: 使用基线 sdm660.dtsi 定义 (0x9f800000)，
+		 * 避免与 ABL 扩大后的 splash_region(0x9d400000+0x2400000) 重叠
+		 * （重叠会导致 dfps 保留页被 mdss 释放进 buddy → double-free） */
+	};
+};
+
+&firmware {
+	android {
+		vbmeta {
+			status = "disabled";
+		};
+
+		fstab {
+			compatible = "android,fstab";
+
+			vendor {
+				compatible = "android,vendor";
+				dev = "/dev/block/platform/soc/c0c4000.sdhci/by-name/vendor";
+				type = "ext4";
+				mnt_flags = "ro,barrier=1,discard";
+				fsmgr_flags = "wait,slotselect";
+				status = "ok";
+			};
+
+			system {
+				compatible = "android,system";
+				dev = "/dev/block/platform/soc/c0c4000.sdhci/by-name/system";
+				type = "ext4";
+				mnt_flags = "ro,barrier=1,discard";
+				fsmgr_flags = "wait,slotselect";
+				status = "ok";
+			};
+		};
+	};
+};
+
+&wdog {
+	/* stock ZUI uses 11000 (jd2018 overlay inherited 13000 from X00QD) */
+	qcom,bark-time = <11000>;
+	qcom,wakeup-enable;
+};
+
+&msm_gpu {
+	/* sdm636.dtsi defaults to A509, but X00T has A512 tweaks */
+	qcom,chipid = <0x05010200>;
+};
+
+&mem_client_3_size {
+		/delete-property/ qcom,allocate-on-request;
+
+		qcom,allocate-boot-time;
+};
+
+&pil_modem {
+	/delete-property/ qcom,complete-ramdump;
+};
+
+&soc {
+	qcom,glink-smem-native-xprt-adsp@86000000 {
+		/delete-property/ cpu-affinity;
+	};
+	
+	ufs1: ufshc@1da4000 {
+		/delete-property/ pinctrl-names;
+		/delete-property/ pinctrl-0;
+		/delete-property/ pinctrl-1;
+	};
+	
+	gpio_keys {
+		/delete-node/ camera_focus;
+		/delete-node/ camera_snapshot;
+
+		vol_up {
+			gpios = <&tlmm 44 0x1>;
+		};
+
+		vol_down {
+			label = "volume_down";
+			gpios = <&tlmm 43 0x1>;
+			linux,input-type = <1>;
+			linux,code = <114>;
+			gpio-key,wakeup;
+			debounce-interval = <15>;
+		};
+	};
+};
+
+&thermal_zones {
+	/delete-node/ vbat_adc;
+	/delete-node/ vbat_low;
+	/delete-node/ vbat_too_low;
+};
