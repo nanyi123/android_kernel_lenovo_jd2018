@@ -106,7 +106,20 @@ static int wiphy_suspend(struct device *dev)
 
 	rtnl_lock();
 	if (rdev->wiphy.registered) {
-		if (!rdev->wiphy.wowlan_config) {
+		/*
+		 * jd2018: the driver advertises WoWLAN support (wiphy->wowlan is
+		 * set) but userspace never installs a trigger configuration, so
+		 * wowlan_config stays NULL. Tearing every interface down here
+		 * sends a deauth frame; the pending management-TX completion is
+		 * then accounted as a wakeup event ("Pending Wakeup Sources:
+		 * mgmt_txrx tx_cmp"), and the very same suspend attempt aborts
+		 * with -EBUSY before the hardware ever gets a chance to sleep.
+		 *
+		 * qcacld enables its own "non-drv" WoW inside ->suspend() and
+		 * explicitly keeps the link up, so when the driver supports
+		 * WoWLAN there is no reason to disconnect first.
+		 */
+		if (!rdev->wiphy.wowlan_config && !rdev->wiphy.wowlan) {
 			cfg80211_leave_all(rdev);
 			cfg80211_process_rdev_events(rdev);
 		}
