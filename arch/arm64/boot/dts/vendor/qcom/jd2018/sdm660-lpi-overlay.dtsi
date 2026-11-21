@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 
-&q6core {
-	lpi_tlmm: lpi_pinctrl@15070000 {
+/* 16 基线：lpi_pinctrl 已在 &soc 下由 sdm660-lpi.dtsi 定义，这里只补 pinctrl 状态 */
+&lpi_tlmm {
 		ter_mi2s_clk_active: ter_mi2s_clk_active {
 			mux {
 				pins = "gpio4";
@@ -97,5 +97,4 @@
 			drive-strength = <2>;
 			};
 		};
-	};
 };

@@ -14,6 +14,8 @@ obj-$(CONFIG_MSM_VIDC_3X_V4L2) := 	msm_v4l2_vidc.o \
 				msm_vidc_dcvs.o
 
 obj-$(CONFIG_DEBUG_FS) += msm_vidc_debug.o
+# tracepoint 定义与 DEBUG_FS 解耦（16 基线把 debug.o 绑到了 DEBUG_FS）
+obj-$(CONFIG_MSM_VIDC_3X_V4L2) += msm_vidc_trace.o
 
 obj-$(CONFIG_MSM_VIDC_3X_V4L2) += governors/
 
