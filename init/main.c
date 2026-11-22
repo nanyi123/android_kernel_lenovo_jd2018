@@ -742,6 +742,17 @@ static inline void smp_prepare_cpus(unsigned int maxcpus) { }
  */
 static void __init setup_command_line(char *command_line)
 {
+	/*
+	 * Compatibility for legacy 2018 bootloaders (Lenovo Z5 jd2018):
+	 * Legacy bootloader passes "skip_initramfs" when booting normal Android,
+	 * but Android 10+ init requires "androidboot.force_normal_boot=1".
+	 * When booting recovery, the bootloader omits "skip_initramfs".
+	 */
+	if (strstr(boot_command_line, "skip_initramfs") &&
+	    !strstr(boot_command_line, "androidboot.force_normal_boot")) {
+		strlcat(boot_command_line, " androidboot.force_normal_boot=1", COMMAND_LINE_SIZE);
+	}
+
 	saved_command_line =
 		memblock_virt_alloc(strlen(boot_command_line) + 1, 0);
 	initcall_command_line =
