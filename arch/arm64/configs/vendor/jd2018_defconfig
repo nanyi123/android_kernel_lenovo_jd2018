@@ -477,7 +477,7 @@ CONFIG_RANDOMIZE_MODULE_REGION_FULL=y
 #
 # Boot options
 #
-CONFIG_CMDLINE="cgroup_disable=pressure androidboot.force_normal_boot=1 androidboot.boot_devices=soc/c0c4000.sdhci,c0c4000.sdhci androidboot.bootdevice=c0c4000.sdhci selinux=1 enforcing=0 androidboot.selinux=permissive"
+CONFIG_CMDLINE="cgroup_disable=pressure androidboot.boot_devices=soc/c0c4000.sdhci,c0c4000.sdhci androidboot.bootdevice=c0c4000.sdhci selinux=1 enforcing=1 androidboot.selinux=enforcing"
 CONFIG_CMDLINE_EXTEND=y
 # CONFIG_CMDLINE_FORCE is not set
 # CONFIG_EFI is not set

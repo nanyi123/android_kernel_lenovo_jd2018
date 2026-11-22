@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 
 &usb3 {
+	vbus_dwc3-supply = <&smb2_vbus>;
 	dwc3@a800000 {
 		maximum-speed = "high-speed";
 	};
