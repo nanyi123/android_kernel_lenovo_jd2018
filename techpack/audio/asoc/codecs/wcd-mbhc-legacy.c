@@ -694,6 +694,12 @@ correct_plug_type:
 	 */
 	if (!wrk_complete && ((plug_type == MBHC_PLUG_TYPE_HEADSET) ||
 	    (plug_type == MBHC_PLUG_TYPE_ANC_HEADPHONE))) {
+		if (mbhc->current_plug == MBHC_PLUG_TYPE_NONE) {
+			pr_debug("%s: current_plug is NONE, reporting headphone\n",
+				 __func__);
+			plug_type = MBHC_PLUG_TYPE_HEADPHONE;
+			goto report;
+		}
 		pr_debug("%s: plug_type:0x%x already reported\n",
 			 __func__, mbhc->current_plug);
 		goto enable_supply;
@@ -714,8 +720,9 @@ report:
 		pr_debug("%s: Switch level is low\n", __func__);
 		goto exit;
 	}
-	if (plug_type == MBHC_PLUG_TYPE_GND_MIC_SWAP && mbhc->btn_press_intr) {
-		pr_debug("%s: insertion of headphone with swap\n", __func__);
+	if (plug_type == MBHC_PLUG_TYPE_GND_MIC_SWAP) {
+		pr_debug("%s: 3-pole TRS / swap detected, reporting as headphone\n",
+			 __func__);
 		wcd_cancel_btn_work(mbhc);
 		plug_type = MBHC_PLUG_TYPE_HEADPHONE;
 	}

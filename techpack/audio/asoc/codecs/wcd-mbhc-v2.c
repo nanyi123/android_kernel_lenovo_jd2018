@@ -846,11 +846,12 @@ void wcd_mbhc_find_plug_and_report(struct wcd_mbhc *mbhc,
 		 */
 		wcd_mbhc_report_plug(mbhc, 1, SND_JACK_HEADPHONE);
 	} else if (plug_type == MBHC_PLUG_TYPE_GND_MIC_SWAP) {
-		if (mbhc->current_plug == MBHC_PLUG_TYPE_HEADPHONE)
-			wcd_mbhc_report_plug(mbhc, 0, SND_JACK_HEADPHONE);
+		pr_debug("%s: GND_MIC_SWAP (3-pole TRS) -> report as headphone\n",
+			 __func__);
 		if (mbhc->current_plug == MBHC_PLUG_TYPE_HEADSET)
 			wcd_mbhc_report_plug(mbhc, 0, SND_JACK_HEADSET);
-		wcd_mbhc_report_plug(mbhc, 1, SND_JACK_UNSUPPORTED);
+		plug_type = MBHC_PLUG_TYPE_HEADPHONE;
+		wcd_mbhc_report_plug(mbhc, 1, SND_JACK_HEADPHONE);
 	} else if (plug_type == MBHC_PLUG_TYPE_HEADSET) {
 		if (mbhc->mbhc_cfg->enable_anc_mic_detect &&
 		    mbhc->mbhc_fn->wcd_mbhc_detect_anc_plug_type)
