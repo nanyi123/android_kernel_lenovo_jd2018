@@ -78,7 +78,7 @@
 
 #define DEBUG_BOARD_VOTER	"fg_debug_board"
 
-#define BUCKET_COUNT			20 //ASUS_BSP battery safety upgrade
+#define BUCKET_COUNT			8 /* jd2018: stock PM660 FG SRAM has 8 cycle-counter buckets (ASUS used 20) */
 #define BUCKET_SOC_PCT			(256 / BUCKET_COUNT)
 
 #define MAX_CC_STEPS			20

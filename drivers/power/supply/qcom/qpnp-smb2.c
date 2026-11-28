@@ -2566,7 +2566,7 @@ void asus_probe_pmic_settings(struct smb_charger *chg)
 		dev_err(chg->dev, "Couldn't set default FAST_CHARGE_CURRENT_CFG_REG rc=%d\n", rc);
 	}
 //A-4:0x1070
-	rc = smblib_write(chg, FLOAT_VOLTAGE_CFG_REG, 0x74);
+	rc = smblib_write(chg, FLOAT_VOLTAGE_CFG_REG, 0x7A);
 	if (rc < 0) {
 		dev_err(chg->dev, "Couldn't set default FLOAT_VOLTAGE_CFG_REG rc=%d\n", rc);
 	}

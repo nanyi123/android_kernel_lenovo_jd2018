@@ -102,7 +102,7 @@ static struct alarm bat_alarm;			// for jeita, asus_min_monitor_work
 /*
 g_fv_setting: 0x74 for 4.357; 0x6D for 4.305; 0x66 for 4.252
 */
-int g_fv_setting = 0x74; //default 4.357
+int g_fv_setting = 0x7A; //default 4.40V (stock jd2018)
 int g_batt_profile_stat =0;
 //ASUS_BSP battery safety upgrade ---
 
@@ -5180,36 +5180,25 @@ void asus_chg_flow_work(struct work_struct *work)
 	case DCP_CHARGER_BIT | QC_3P0_BIT:
 	case DCP_CHARGER_BIT | QC_2P0_BIT:
 	case DCP_CHARGER_BIT:
-		rc = smblib_write(smbchg_dev, HVDCP_PULSE_COUNT_MAX, 0x0);
+		/* jd2018: Lenovo Z5 has no ASUS ADC_GPIO2 adapter divider; keep native HVDCP enabled. */
+		rc = smblib_masked_write(smbchg_dev, USBIN_OPTIONS_1_CFG_REG,
+				AUTO_SRC_DETECT_BIT | HVDCP_EN_BIT,
+				AUTO_SRC_DETECT_BIT | HVDCP_EN_BIT);
 		if (rc < 0)
-			CHG_DBG_E("%s: Failed to set HVDCP_PULSE_COUNT_MAX\n", __func__);
+			CHG_DBG_E("%s: Failed to enable HVDCP_EN_BIT\n", __func__);
 
-		rc = smblib_masked_write(smbchg_dev, USBIN_OPTIONS_1_CFG_REG, AUTO_SRC_DETECT_BIT | HVDCP_EN_BIT, 0x0);
+		set_icl = (apsd_result->bit & (QC_3P0_BIT | QC_2P0_BIT)) ? ICL_3000mA : ICL_2000mA;
+		rc = smblib_masked_write(smbchg_dev, USBIN_CURRENT_LIMIT_CFG_REG,
+				USBIN_CURRENT_LIMIT_MASK, set_icl);
 		if (rc < 0)
-			CHG_DBG_E("%s: Failed to set USBIN_OPTIONS_1_CFG_REG\n", __func__);
+			CHG_DBG_E("%s: Failed to set USBIN_CURRENT_LIMIT\n", __func__);
 
-		CHG_DBG("%s: Rerun APSD 1st\n", __func__);
-		rc = smblib_masked_write(smbchg_dev, CMD_APSD_REG, APSD_RERUN_BIT, APSD_RERUN_BIT);
-		if (rc < 0)
-			CHG_DBG_E("%s: Failed to set CMD_APSD_REG\n", __func__);
-
-		if (global_gpio && gpio_is_valid(global_gpio->ADC_SW_EN)) {
-			rc = gpio_direction_output(global_gpio->ADC_SW_EN, 1);	//USB DPDM Switch to ADC(2D)
-			if (rc) {
-				CHG_DBG_E("%s: failed to pull-high ADC_SW_EN-gpios59\n", __func__);
-				break;
-			} else {
-				CHG_DBG("%s: Pull high USBSW_S\n", __func__);
-			}
-		}
-
-		if (HVDCP_FLAG == 0) {
-			CHG_DBG("%s: NOT factory_build, HVDCP_FLAG = 0, ADC_WAIT_TIME = 3s\n", __func__);
-			schedule_delayed_work(&smbchg_dev->asus_adapter_adc_work, msecs_to_jiffies(ADC_WAIT_TIME_HVDCP0));
-		} else {
-			CHG_DBG("%s: NOT factory_build, HVDCP_FLAG = 2or3, ADC_WAIT_TIME = 0.1s\n", __func__);
-			schedule_delayed_work(&smbchg_dev->asus_adapter_adc_work, msecs_to_jiffies(ADC_WAIT_TIME_HVDCP23));
-		}
+		asus_smblib_rerun_aicl(smbchg_dev);
+		asus_adapter_detecting_flag = 0;
+		asus_flow_processing = 0;
+		smblib_asus_monitor_start(smbchg_dev, 0);
+		CHG_DBG_EVT("jd2018 DCP/QC detected (bit=0x%x), set ICL 0x%x\n",
+				apsd_result->bit, set_icl);
 		break;
 	default:
 
